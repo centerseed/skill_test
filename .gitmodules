@@ -1,0 +1,9 @@
+[submodule "naru_agent"]
+	path = naru_agent
+	url = https://github.com/centerseed/naru_agent.git
+[submodule "hf_space"]
+	path = hf_space
+	url = https://huggingface.co/spaces/centerseed/health123_poc
+[submodule "poc"]
+	path = poc
+	url = https://huggingface.co/spaces/centerseed/health123_poc

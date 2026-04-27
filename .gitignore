@@ -1,0 +1,27 @@
+# 環境變數（含 API Key，絕對不能 commit）
+.env
+
+# Python 虛擬環境
+.venv/
+__pycache__/
+*.pyc
+
+# ChromaDB 本地資料庫
+poc/chroma_db/
+
+# 圖片檔案
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.bmp
+*.tiff
+*.tif
+*.svg
+*.ico
+
+# 系統檔案
+.DS_Store
+.vscode/
+.claude/
