@@ -42,8 +42,18 @@ jobs:
         shell: cmd
         run: mkdir "C:\health-research\ingredients" 2>nul
 
-      - name: Run full verification (test_windows.py)
+      - name: Add ffmpeg to current session PATH
         shell: pwsh
         run: |
-          $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-          python skills-client/test_windows.py
+          $machinePath = [System.Environment]::GetEnvironmentVariable("PATH","Machine")
+          $ffmpegDir = ($machinePath -split ';' | Where-Object { $_ -like '*ffmpeg*' } | Select-Object -First 1)
+          if ($ffmpegDir) {
+            "PATH=$env:PATH;$ffmpegDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+            Write-Host "Added ffmpeg to session PATH: $ffmpegDir"
+          } else {
+            Write-Host "ffmpeg dir not found in machine PATH, trying winget default..."
+            "PATH=$env:PATH;C:\ProgramData\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-7.1-full_build\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+
+      - name: Run full verification (test_windows.py)
+        run: python skills-client/test_windows.py
