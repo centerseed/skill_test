@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'skills-client/**'
-      - '.github/workflows/test-skills-windows.yml'
+      - "skills-client/**"
+      - ".github/workflows/test-skills-windows.yml"
 
 jobs:
   test-windows:
@@ -14,138 +14,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Step 1: Python 安裝（模擬用戶從 python.org 下載安裝） ──────
-      # CI 預裝 Python，這裡驗證版本與 PATH 是否正確
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: "[Step 2] Verify Python in PATH"
-        run: python --version
-
-      # ── Step 3: pip 安裝套件（完全照 SETUP_PROMPT.md） ────────────
-      - name: "[Step 3] Install pip packages"
+      - name: Install pip packages (Step 3 of SETUP_PROMPT)
         run: python -m pip install requests beautifulsoup4 youtube-transcript-api yt-dlp faster-whisper
 
-      - name: "[Step 3] Verify each package"
-        run: |
-          python -c "import requests; print('requests OK')"
-          python -c "import bs4; print('beautifulsoup4 OK')"
-          python -c "from youtube_transcript_api import YouTubeTranscriptApi; print('youtube-transcript-api OK')"
-          python -m yt_dlp --version
-          python -c "from faster_whisper import WhisperModel; print('faster-whisper OK')"
-
-      # ── Step 4: ffmpeg（用 winget 安裝，模擬真實用戶流程） ──────────
-      # CI 環境預裝 ffmpeg，先移除再用 winget 重裝，確保安裝指令本身可用
-      - name: "[Step 4] Remove pre-installed ffmpeg to simulate clean state"
-        shell: pwsh
-        run: |
-          $ffmpegPath = Get-Command ffmpeg -ErrorAction SilentlyContinue
-          if ($ffmpegPath) {
-            Write-Host "Pre-installed ffmpeg found at: $($ffmpegPath.Source), removing from PATH for this test"
-            # 只從 session PATH 移除，不實際刪除系統檔案
-            $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notlike '*ffmpeg*' -and $_ -notlike '*chocolatey*' }) -join ';'
-          }
-          $check = python -c "import subprocess; r=subprocess.run(['ffmpeg','-version'],capture_output=True); print('found' if r.returncode==0 else 'not_found')"
-          Write-Host "ffmpeg status after PATH cleanup: $check"
-
-      - name: "[Step 4] Install ffmpeg via winget"
+      - name: Install ffmpeg via winget (Step 4 of SETUP_PROMPT)
         shell: pwsh
         run: |
           winget install --id Gyan.FFmpeg -e --accept-source-agreements --accept-package-agreements
-          # winget 安裝後需要重新整理 PATH
+          refreshenv 2>$null
           $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+          Write-Host "ffmpeg version:"
           ffmpeg -version | Select-Object -First 1
-          Write-Host "ffmpeg install via winget: OK"
 
-      - name: "[Step 4] Verify ffmpeg available after install"
-        shell: pwsh
-        run: |
-          $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-          $result = python -c "import subprocess; r=subprocess.run(['ffmpeg','-version'],capture_output=True); print('ffmpeg OK' if r.returncode==0 else 'ffmpeg FAIL')"
-          Write-Host $result
-          if ($result -ne "ffmpeg OK") { exit 1 }
-
-      # ── Step 5: xcopy skills（照 SETUP_PROMPT.md 指令） ──────────
-      - name: "[Step 5] Copy skills to .claude\skills via xcopy"
+      - name: Copy skills to .claude\skills (Step 5 of SETUP_PROMPT)
         shell: cmd
         run: |
           mkdir "%USERPROFILE%\.claude\skills" 2>nul
           xcopy /E /I /Y "skills-client\product-page-to-md" "%USERPROFILE%\.claude\skills\product-page-to-md"
           xcopy /E /I /Y "skills-client\youtube-video-to-md" "%USERPROFILE%\.claude\skills\youtube-video-to-md"
 
-      - name: "[Step 5] Verify skills copied"
-        run: |
-          python -c "
-          import os
-          p1 = os.path.join(os.environ['USERPROFILE'], r'.claude\skills\product-page-to-md\SKILL.md')
-          p2 = os.path.join(os.environ['USERPROFILE'], r'.claude\skills\youtube-video-to-md\SKILL.md')
-          assert os.path.exists(p1), f'Missing: {p1}'
-          assert os.path.exists(p2), f'Missing: {p2}'
-          print('product-page skill OK')
-          print('youtube skill OK')
-          "
-
-      # ── Step 6: 建立輸出資料夾 ────────────────────────────────────
-      - name: "[Step 6] Create output folder"
+      - name: Create output folder (Step 6 of SETUP_PROMPT)
         shell: cmd
         run: mkdir "C:\health-research\ingredients" 2>nul
 
-      # ── Step 7: 跑 parse_page.py（實際腳本執行驗證） ───────────────
-      - name: "[Step 7] Run parse_page.py"
-        working-directory: skills-client/product-page-to-md/scripts
-        run: |
-          python parse_page.py "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html" test_output
-          python -c "
-          import json, os
-          txt = open('test_output_text.txt', encoding='utf-8').read()
-          imgs = json.load(open('test_output_images.json', encoding='utf-8'))
-          assert len(txt) > 100, 'Text too short'
-          print(f'parse_page OK — text {len(txt):,} chars, images {len(imgs)} URLs')
-          "
-
-      # ── Step 7: 跑 fetch_transcript.py（字幕路徑） ─────────────────
-      - name: "[Step 7] Run fetch_transcript.py"
-        working-directory: skills-client/youtube-video-to-md/scripts
+      - name: Run full verification (test_windows.py)
         shell: pwsh
         run: |
           $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-          python fetch_transcript.py "ArxVGX_6CVg" "transcript_test/output.json"
-          python -c "
-          import json, os
-          data = json.load(open('transcript_test/output.json', encoding='utf-8'))
-          assert len(data) > 0, 'Empty transcript'
-          print(f'fetch_transcript OK — {len(data)} segments')
-          "
-
-      # ── 最終總覽 ──────────────────────────────────────────────────
-      - name: Final summary
-        shell: pwsh
-        run: |
-          $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-          python -c "
-          import os, subprocess
-          checks = {
-            'python 3.11':        True,
-            'requests':           __import__('importlib').util.find_spec('requests') is not None,
-            'beautifulsoup4':     __import__('importlib').util.find_spec('bs4') is not None,
-            'youtube-transcript-api': __import__('importlib').util.find_spec('youtube_transcript_api') is not None,
-            'yt-dlp':             subprocess.run(['python','-m','yt_dlp','--version'], capture_output=True).returncode == 0,
-            'faster-whisper':     __import__('importlib').util.find_spec('faster_whisper') is not None,
-            'ffmpeg':             subprocess.run(['ffmpeg','-version'], capture_output=True).returncode == 0,
-            'product-page skill': os.path.exists(os.path.join(os.environ['USERPROFILE'], r'.claude\skills\product-page-to-md\SKILL.md')),
-            'youtube skill':      os.path.exists(os.path.join(os.environ['USERPROFILE'], r'.claude\skills\youtube-video-to-md\SKILL.md')),
-            'output folder':      os.path.exists(r'C:\health-research\ingredients'),
-          }
-          print()
-          print('=== Final Checklist ===')
-          for k, v in checks.items():
-            print(f'  {\"OK  \" if v else \"FAIL\"} {k}')
-          print()
-          failed = [k for k, v in checks.items() if not v]
-          if failed:
-            print('FAILED:', failed)
-            exit(1)
-          print('All checks passed!')
-          "
+          python skills-client/test_windows.py
