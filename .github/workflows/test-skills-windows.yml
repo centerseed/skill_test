@@ -1,0 +1,101 @@
+name: Test skills-client on Windows
+
+on:
+  workflow_dispatch:  # 手動觸發
+  push:
+    paths:
+      - 'skills-client/**'
+
+jobs:
+  test-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify Python
+        run: python --version
+
+      # ── 套件安裝 ──────────────────────────────────────────────
+      - name: Install pip packages
+        run: python -m pip install requests beautifulsoup4 youtube-transcript-api yt-dlp faster-whisper
+
+      - name: Verify packages
+        run: |
+          python -c "import requests; print('requests OK')"
+          python -c "import bs4; print('beautifulsoup4 OK')"
+          python -c "from youtube_transcript_api import YouTubeTranscriptApi; print('youtube-transcript-api OK')"
+          python -m yt_dlp --version
+          python -c "from faster_whisper import WhisperModel; print('faster-whisper OK')"
+
+      # ── parse_page.py：用真實 URL 測試爬取 ──────────────────────
+      - name: Test parse_page.py
+        working-directory: skills-client/product-page-to-md/scripts
+        run: |
+          python parse_page.py "https://www.iherb.com/pr/now-foods-omega-3/795" test_output
+          python -c "import os; assert os.path.exists('test_output_text.txt'), 'text file missing'; assert os.path.exists('test_output_images.json'), 'images file missing'; print('parse_page OK')"
+
+      - name: Show parse_page output size
+        working-directory: skills-client/product-page-to-md/scripts
+        run: |
+          python -c "
+          import json, os
+          txt = open('test_output_text.txt', encoding='utf-8').read()
+          imgs = json.load(open('test_output_images.json', encoding='utf-8'))
+          print(f'Text: {len(txt):,} chars')
+          print(f'Images: {len(imgs)} URLs')
+          print('First 200 chars:', txt[:200])
+          "
+
+      # ── fetch_transcript.py：字幕抓取 ──────────────────────────
+      - name: Test fetch_transcript.py (subtitle path)
+        working-directory: skills-client/youtube-video-to-md/scripts
+        run: |
+          python fetch_transcript.py "dQw4w9WgXcQ" "transcript_test/output.json"
+        continue-on-error: true  # 該影片若無字幕，走 Whisper 路徑會很慢，允許跳過
+
+      # ── 路徑相容性：模擬 SETUP_PROMPT 的 Windows 指令 ──────────
+      - name: Simulate skills xcopy to .claude\skills
+        shell: cmd
+        run: |
+          mkdir "%USERPROFILE%\.claude\skills" 2>nul
+          xcopy /E /I /Y "skills-client\product-page-to-md" "%USERPROFILE%\.claude\skills\product-page-to-md"
+          xcopy /E /I /Y "skills-client\youtube-video-to-md" "%USERPROFILE%\.claude\skills\youtube-video-to-md"
+
+      - name: Verify skills copied
+        run: |
+          python -c "
+          import os
+          p1 = os.path.join(os.environ['USERPROFILE'], r'.claude\skills\product-page-to-md\SKILL.md')
+          p2 = os.path.join(os.environ['USERPROFILE'], r'.claude\skills\youtube-video-to-md\SKILL.md')
+          assert os.path.exists(p1), f'Missing: {p1}'
+          assert os.path.exists(p2), f'Missing: {p2}'
+          print('product-page skill OK')
+          print('youtube skill OK')
+          "
+
+      - name: Create output folder
+        shell: cmd
+        run: mkdir "C:\health-research\ingredients" 2>nul
+
+      - name: Final summary
+        run: |
+          python -c "
+          import os, subprocess
+          checks = {
+            'python': True,
+            'yt-dlp': subprocess.run(['python', '-m', 'yt_dlp', '--version'], capture_output=True).returncode == 0,
+            'product-page skill': os.path.exists(os.path.join(os.environ['USERPROFILE'], r'.claude\skills\product-page-to-md\SKILL.md')),
+            'youtube skill': os.path.exists(os.path.join(os.environ['USERPROFILE'], r'.claude\skills\youtube-video-to-md\SKILL.md')),
+            'output folder': os.path.exists(r'C:\health-research\ingredients'),
+          }
+          for k, v in checks.items():
+            print(f'  {\"OK\" if v else \"FAIL\"} {k}')
+          assert all(checks.values()), 'Some checks failed'
+          print('All checks passed!')
+          "
