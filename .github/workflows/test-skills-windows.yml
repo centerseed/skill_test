@@ -42,17 +42,18 @@ jobs:
         shell: cmd
         run: mkdir "C:\health-research\ingredients" 2>nul
 
-      - name: Add ffmpeg to current session PATH
+      - name: Add ffmpeg to PATH (GITHUB_PATH)
         shell: pwsh
         run: |
           $machinePath = [System.Environment]::GetEnvironmentVariable("PATH","Machine")
-          $ffmpegDir = ($machinePath -split ';' | Where-Object { $_ -like '*ffmpeg*' } | Select-Object -First 1)
+          $ffmpegDir = ($machinePath -split ';' | Where-Object { $_ -like '*ffmpeg*' -or $_ -like '*FFmpeg*' } | Select-Object -First 1)
           if ($ffmpegDir) {
-            "PATH=$env:PATH;$ffmpegDir" | Out-File -FilePath $env:GITHUB_ENV -Append
-            Write-Host "Added ffmpeg to session PATH: $ffmpegDir"
+            Write-Host "Found ffmpeg at: $ffmpegDir"
+            $ffmpegDir | Out-File -FilePath $env:GITHUB_PATH -Append
           } else {
-            Write-Host "ffmpeg dir not found in machine PATH, trying winget default..."
-            "PATH=$env:PATH;C:\ProgramData\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-7.1-full_build\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+            $fallback = "C:\ProgramData\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-7.1-full_build\bin"
+            Write-Host "Not in machine PATH, using fallback: $fallback"
+            $fallback | Out-File -FilePath $env:GITHUB_PATH -Append
           }
 
       - name: Run full verification (test_windows.py)

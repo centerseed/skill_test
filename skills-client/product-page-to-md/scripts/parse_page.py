@@ -19,7 +19,7 @@ headers = {
 
 r = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
 r.raise_for_status()
-print(f"Fetched: {r.status_code} — {len(r.text):,} chars")
+print(f"Fetched: {r.status_code} - {len(r.text):,} chars")
 
 soup = BeautifulSoup(r.text, "html.parser")
 for tag in soup(["script", "style", "nav", "footer", "noscript"]):
@@ -30,7 +30,7 @@ text = re.sub(r"\n{3,}", "\n\n", text)
 
 with open(f"{prefix}_text.txt", "w", encoding="utf-8") as f:
     f.write(text)
-print(f"Text: {len(text):,} chars → {prefix}_text.txt")
+print(f"Text: {len(text):,} chars -> {prefix}_text.txt")
 
 # 提取圖片 URL
 imgs, seen = [], set()
@@ -56,4 +56,4 @@ for img in imgs:
 
 with open(f"{prefix}_images.json", "w", encoding="utf-8") as f:
     json.dump(deduped, f, ensure_ascii=False, indent=2)
-print(f"Images: {len(deduped)} URLs → {prefix}_images.json")
+print(f"Images: {len(deduped)} URLs -> {prefix}_images.json")
