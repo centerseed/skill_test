@@ -30,8 +30,15 @@ def module_ok(mod):
 def cmd_ok(args):
     try:
         r = subprocess.run(args, capture_output=True, timeout=30)
+        if r.returncode != 0:
+            print(f"    cmd {args[0]} returned {r.returncode}: {r.stderr.decode(errors='replace')[:200]}")
         return r.returncode == 0
-    except Exception:
+    except FileNotFoundError:
+        print(f"    cmd {args[0]} not found in PATH")
+        print(f"    shutil.which: {shutil.which(args[0])}")
+        return False
+    except Exception as e:
+        print(f"    cmd {args[0]} exception: {e}")
         return False
 
 
@@ -46,6 +53,8 @@ check("yt-dlp", cmd_ok([sys.executable, "-m", "yt_dlp", "--version"]))
 check("faster-whisper", module_ok("faster_whisper"))
 
 print("\n=== Step 3: ffmpeg ===")
+ffmpeg_path = shutil.which("ffmpeg")
+print(f"    shutil.which('ffmpeg'): {ffmpeg_path}")
 check("ffmpeg", cmd_ok(["ffmpeg", "-version"]))
 
 print("\n=== Step 4: parse_page.py ===")
@@ -61,12 +70,13 @@ try:
     )
     text_ok = os.path.exists(tmp_prefix + "_text.txt")
     imgs_ok = os.path.exists(tmp_prefix + "_images.json")
+    if r.returncode != 0 or r.stderr:
+        print(f"    stdout: {r.stdout[-300:]}")
+        print(f"    stderr: {r.stderr[-300:]}")
     if text_ok:
         size = len(open(tmp_prefix + "_text.txt", encoding="utf-8").read())
         check(f"parse_page.py (text {size:,} chars)", size > 100)
     else:
-        print(r.stdout)
-        print(r.stderr)
         check("parse_page.py", False)
     check("parse_page.py images.json", imgs_ok)
 except Exception as e:
@@ -77,16 +87,17 @@ print("\n=== Step 5: fetch_transcript.py ===")
 transcript_script = os.path.join(script_dir, "youtube-video-to-md", "scripts", "fetch_transcript.py")
 tmp_transcript = os.path.join(tempfile.gettempdir(), "h123_transcript", "output.json")
 try:
+    # dQw4w9WgXcQ = Rick Astley, globally available, has auto-generated EN captions
     r = subprocess.run(
-        [sys.executable, transcript_script, "ArxVGX_6CVg", tmp_transcript],
+        [sys.executable, transcript_script, "dQw4w9WgXcQ", tmp_transcript],
         capture_output=True, text=True, timeout=60
     )
     if os.path.exists(tmp_transcript):
         data = json.load(open(tmp_transcript, encoding="utf-8"))
         check(f"fetch_transcript.py ({len(data)} segments)", len(data) > 0)
     else:
-        print(r.stdout[-500:] if r.stdout else "")
-        print(r.stderr[-500:] if r.stderr else "")
+        print(f"    stdout: {r.stdout[-400:]}")
+        print(f"    stderr: {r.stderr[-400:]}")
         check("fetch_transcript.py", False)
 except Exception as e:
     check("fetch_transcript.py", False)
