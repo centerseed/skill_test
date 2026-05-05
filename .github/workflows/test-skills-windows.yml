@@ -22,14 +22,21 @@ jobs:
       - name: Install pip packages (Step 3 of SETUP_PROMPT)
         run: python -m pip install requests beautifulsoup4 youtube-transcript-api yt-dlp faster-whisper
 
-      - name: Install ffmpeg via winget (Step 4 of SETUP_PROMPT)
+      - name: Install ffmpeg via winget and register to GITHUB_PATH (Step 4 of SETUP_PROMPT)
         shell: pwsh
         run: |
           winget install --id Gyan.FFmpeg -e --accept-source-agreements --accept-package-agreements
-          refreshenv 2>$null
           $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-          Write-Host "ffmpeg version:"
-          ffmpeg -version | Select-Object -First 1
+          $ffmpegExe = Get-Command ffmpeg -ErrorAction SilentlyContinue
+          if ($ffmpegExe) {
+            $ffmpegDir = Split-Path $ffmpegExe.Source
+            Write-Host "ffmpeg installed at: $ffmpegDir"
+            ffmpeg -version | Select-Object -First 1
+            $ffmpegDir | Out-File -FilePath $env:GITHUB_PATH -Append
+          } else {
+            Write-Host "ERROR: ffmpeg not found after winget install"
+            exit 1
+          }
 
       - name: Copy skills to .claude\skills (Step 5 of SETUP_PROMPT)
         shell: cmd
@@ -41,20 +48,6 @@ jobs:
       - name: Create output folder (Step 6 of SETUP_PROMPT)
         shell: cmd
         run: mkdir "C:\health-research\ingredients" 2>nul
-
-      - name: Add ffmpeg to PATH (GITHUB_PATH)
-        shell: pwsh
-        run: |
-          $machinePath = [System.Environment]::GetEnvironmentVariable("PATH","Machine")
-          $ffmpegDir = ($machinePath -split ';' | Where-Object { $_ -like '*ffmpeg*' -or $_ -like '*FFmpeg*' } | Select-Object -First 1)
-          if ($ffmpegDir) {
-            Write-Host "Found ffmpeg at: $ffmpegDir"
-            $ffmpegDir | Out-File -FilePath $env:GITHUB_PATH -Append
-          } else {
-            $fallback = "C:\ProgramData\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-7.1-full_build\bin"
-            Write-Host "Not in machine PATH, using fallback: $fallback"
-            $fallback | Out-File -FilePath $env:GITHUB_PATH -Append
-          }
 
       - name: Run full verification (test_windows.py)
         run: python skills-client/test_windows.py
