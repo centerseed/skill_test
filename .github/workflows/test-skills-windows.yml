@@ -33,11 +33,11 @@ jobs:
           python -m yt_dlp --version
           python -c "from faster_whisper import WhisperModel; print('faster-whisper OK')"
 
-      # ── parse_page.py：用真實 URL 測試爬取 ──────────────────────
+      # ── parse_page.py：用不擋 CI 的網站測試爬取邏輯 ──────────────
       - name: Test parse_page.py
         working-directory: skills-client/product-page-to-md/scripts
         run: |
-          python parse_page.py "https://www.iherb.com/pr/now-foods-omega-3/795" test_output
+          python parse_page.py "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html" test_output
           python -c "import os; assert os.path.exists('test_output_text.txt'), 'text file missing'; assert os.path.exists('test_output_images.json'), 'images file missing'; print('parse_page OK')"
 
       - name: Show parse_page output size
